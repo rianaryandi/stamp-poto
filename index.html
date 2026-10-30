@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stamp Foto</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 16px; max-width: 480px; margin: 0 auto; }
+  h1 { font-size: 24px; font-weight: 800; margin-bottom: 4px; background: linear-gradient(135deg, #fbbf24, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .page-sub { font-size: 13px; color: #64748b; margin-bottom: 20px; }
+  .card { background: #1e293b; border-radius: 14px; padding: 16px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,.06); }
+  .card-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #fbbf24; }
+  input[type="file"] { display: none; }
+  .upload-btn { display: block; width: 100%; padding: 14px; background: rgba(251,191,36,.12); border: 2px dashed rgba(251,191,36,.4); color: #fbbf24; border-radius: 12px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; }
+  .upload-btn:active { background: rgba(251,191,36,.2); }
+  label.opt { display: flex; align-items: center; gap: 10px; padding: 10px 0; font-size: 14px; cursor: pointer; }
+  label.opt input[type="checkbox"] { width: 18px; height: 18px; accent-color: #fbbf24; }
+  input[type="text"] { width: 100%; padding: 12px; background: #0f172a; border: 1px solid rgba(255,255,255,.1); color: #e2e8f0; border-radius: 10px; font-size: 14px; margin-top: 8px; }
+  input[type="text"]:focus { outline: none; border-color: #fbbf24; }
+  #preview-wrap { display: none; margin-top: 12px; }
+  #preview { width: 100%; border-radius: 12px; display: block; }
+  .btn { display: block; width: 100%; padding: 14px; border: 0; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 12px; transition: transform .15s; }
+  .btn:active { transform: scale(.97); }
+  .btn-stamp { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; box-shadow: 0 4px 12px rgba(245,158,11,.3); }
+  .btn-download { background: linear-gradient(135deg, #0d9488, #0f766e); color: #fff; box-shadow: 0 4px 12px rgba(13,148,136,.3); display: none; }
+  .btn-location { background: rgba(255,255,255,.06); color: #e2e8f0; border: 1px solid rgba(255,255,255,.1); font-size: 13px; padding: 10px; margin-top: 8px; }
+  #loc-status { font-size: 12px; color: #64748b; margin-top: 6px; }
+  .pos-row { display: flex; gap: 8px; margin-top: 8px; }
+  .pos-btn { flex: 1; padding: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); color: #94a3b8; border-radius: 8px; font-size: 12px; cursor: pointer; }
+  .pos-btn.active { background: rgba(251,191,36,.15); border-color: #fbbf24; color: #fbbf24; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>Stamp Foto</h1>
+<div class="page-sub">Pilih foto dari galeri, tempel timestamp, unduh</div>
+
+<div class="card">
+  <div class="card-title">1. Pilih Foto</div>
+  <label for="file-input" class="upload-btn">📁 Pilih dari Galeri</label>
+  <input type="file" id="file-input" accept="image/*">
+  <div id="preview-wrap"><img id="preview" alt="preview"></div>
+</div>
+
+<div class="card">
+  <div class="card-title">2. Isi Stamp</div>
+  <label class="opt"><input type="checkbox" id="opt-datetime" checked> Tanggal & Jam</label>
+  <label class="opt"><input type="checkbox" id="opt-location" checked> Lokasi</label>
+  <label class="opt"><input type="checkbox" id="opt-custom" checked> Teks Kustom</label>
+  <input type="text" id="custom-text" placeholder="Teks kustom (mis: PBB Puri Indah Mall)">
+  <div style="margin-top:12px;font-size:13px;color:#94a3b8">Alamat tetap (untuk stamp):</div>
+  <input type="text" id="fixed-address" value="PBB Puri Indah Mall, Jakarta Barat">
+  <div style="margin-top:8px;font-size:12px;color:#64748b">Koordinat: jitter otomatis dari Puri (<span id="coord-preview">-</span>)</div>
+  <div style="margin-top:12px;font-size:13px;color:#94a3b8">Posisi stamp:</div>
+  <div class="pos-row">
+    <button class="pos-btn" data-pos="top-left" onclick="setPos('top-left',this)">Kiri Atas</button>
+    <button class="pos-btn" data-pos="top-right" onclick="setPos('top-right',this)">Kanan Atas</button>
+  </div>
+  <div class="pos-row">
+    <button class="pos-btn active" data-pos="bottom-left" onclick="setPos('bottom-left',this)">Kiri Bawah</button>
+    <button class="pos-btn" data-pos="bottom-right" onclick="setPos('bottom-right',this)">Kanan Bawah</button>
+  </div>
+</div>
+
+<button class="btn btn-stamp" id="btn-stamp" onclick="stampPhoto()">Tempel Stamp</button>
+<button class="btn btn-download" id="btn-download" onclick="downloadPhoto()">⬇ Unduh Foto</button>
+
+<canvas id="canvas" style="display:none"></canvas>
+
+<script>
+var selectedImage = null;
+var stampPos = 'bottom-left';
+
+// Pakai data jitter yang sama dengan web absen (index.html)
+// Kantor: PBB Puri Indah Mall
+var OFFICE = { lat: -6.18825472, lng: 106.73367444, name: 'PBB Puri Indah Mall' };
+var _gw = null;
+function _igw() {
+  var spawnR = 2.0 + Math.random() * 1.0;
+  var spawnA = Math.random() * Math.PI * 2;
+  _gw = {
+    lat: OFFICE.lat + (spawnR * Math.cos(spawnA)) / 111320,
+    lng: OFFICE.lng + (spawnR * Math.sin(spawnA)) / (111320 * Math.cos(OFFICE.lat * Math.PI / 180)),
+    acc: 5 + Math.random() * 4
+  };
+}
+function jitterCoord() {
+  if (!_gw) _igw();
+  var j = 0.1 + Math.random() * 0.15;
+  var a = Math.random() * Math.PI * 2;
+  var lat = _gw.lat + (j * Math.cos(a)) / 111320;
+  var lng = _gw.lng + (j * Math.sin(a)) / (111320 * Math.cos(OFFICE.lat * Math.PI / 180));
+  _gw.lat = lat; _gw.lng = lng;
+  return { lat: lat, lng: lng };
+}
+
+document.getElementById('file-input').addEventListener('change', function(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var img = new Image();
+    img.onload = function() {
+      selectedImage = img;
+      document.getElementById('preview').src = ev.target.result;
+      document.getElementById('preview-wrap').style.display = 'block';
+      document.getElementById('btn-download').style.display = 'none';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+function setPos(pos, el) {
+  stampPos = pos;
+  document.querySelectorAll('.pos-btn').forEach(function(b) { b.classList.remove('active'); });
+  el.classList.add('active');
+}
+
+function stampPhoto() {
+  if (!selectedImage) { alert('Pilih foto dulu!'); return; }
+  var canvas = document.getElementById('canvas');
+  var ctx = canvas.getContext('2d');
+  canvas.width = selectedImage.naturalWidth;
+  canvas.height = selectedImage.naturalHeight;
+  ctx.drawImage(selectedImage, 0, 0);
+
+  var showDT = document.getElementById('opt-datetime').checked;
+  var showLoc = document.getElementById('opt-location').checked;
+  var showCustom = document.getElementById('opt-custom').checked;
+  var customText = document.getElementById('custom-text').value.trim();
+  var fixedAddr = document.getElementById('fixed-address').value.trim();
+
+  // Ambil koordinat dari jitter (sama kayak web absen)
+  var coord = jitterCoord();
+  var coordStr = coord.lat.toFixed(5) + ', ' + coord.lng.toFixed(5);
+  document.getElementById('coord-preview').textContent = coordStr;
+
+  if (!showDT && !showLoc && !(showCustom && customText)) { alert('Pilih minimal satu isi stamp!'); return; }
+
+  var W = canvas.width, H = canvas.height;
+  var baseSize = Math.max(20, Math.floor(W / 28));
+
+  // Gaya Timemark: teks langsung di foto (tanpa kotak), dengan shadow
+  ctx.textBaseline = 'top';
+  function txt(t, x, y, size, color, bold) {
+    ctx.font = (bold === false ? '' : 'bold ') + size + 'px system-ui, sans-serif';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = Math.max(4, size / 8);
+    ctx.fillStyle = color;
+    ctx.fillText(t, x, y);
+    ctx.shadowBlur = 0;
+    return ctx.measureText(t).width;
+  }
+
+  var pad = Math.floor(baseSize * 0.9);
+  var bx = pad, by = H - pad;
+
+  // Kode foto acak (kayak Timemark)
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var kode = '';
+  for (var ki = 0; ki < 12; ki++) kode += chars[Math.floor(Math.random() * chars.length)];
+
+  var now = new Date();
+  var days = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  var months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  var timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  var dateStr = now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
+  var dayStr = days[now.getDay()];
+
+  // Hitung tinggi total dari bawah ke atas
+  var sTime = baseSize * 3.2;
+  var sDate = baseSize * 1.05;
+  var sAddr = baseSize * 0.95;
+  var sKode = baseSize * 0.8;
+  var lh = 1.35;
+
+  // Alamat: pecah jadi beberapa baris kalau panjang
+  var addrLines = [];
+  if (showLoc && fixedAddr) {
+    var words = fixedAddr.split(' ');
+    var cur = '';
+    words.forEach(function(w) {
+      ctx.font = 'bold ' + sAddr + 'px system-ui, sans-serif';
+      if (ctx.measureText(cur + ' ' + w).width > W * 0.85 && cur) { addrLines.push(cur); cur = w; }
+      else cur = cur ? cur + ' ' + w : w;
+    });
+    if (cur) addrLines.push(cur);
+    // Tambah koordinat sebagai baris terakhir alamat
+    addrLines.push(coordStr);
+  }
+  var customLines = [];
+  if (showCustom && customText) customLines.push(customText);
+
+  var nAddr = addrLines.length;
+  var nCustom = customLines.length;
+  // total baris dari bawah: kode(1) + addr + custom + tanggal(2 baris: date+day) + jam(1)
+  var totalH = sKode*lh + nAddr*sAddr*lh + nCustom*sAddr*lh + (sDate*lh*2) + sTime*lh + pad*2;
+  var y = H - pad - totalH;
+
+  // Baris 1: JAM besar (kiri) + garis kuning + tanggal/hari (kanan)
+  var timeW = 0;
+  if (showDT) {
+    ctx.font = 'bold ' + sTime + 'px system-ui, sans-serif';
+    timeW = ctx.measureText(timeStr).width;
+    txt(timeStr, bx, y, sTime, '#ffffff');
+    // garis kuning vertikal
+    var lx = bx + timeW + pad*0.6;
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(lx, y + sTime*0.1, Math.max(3, baseSize/10), sTime*0.9 + sDate*lh*2);
+    // tanggal & hari di kanan garis
+    var rx = lx + pad*0.7;
+    txt(dateStr, rx, y + sTime*0.15, sDate, '#ffffff');
+    txt(dayStr, rx, y + sTime*0.15 + sDate*lh, sDate, '#ffffff');
+    y += sTime*lh + sDate*lh*0.5;
+  }
+
+  // Baris alamat
+  addrLines.forEach(function(al) {
+    txt(al, bx, y, sAddr, '#ffffff');
+    y += sAddr * lh;
+  });
+  // Baris custom
+  customLines.forEach(function(cl) {
+    txt(cl, bx, y, sAddr, '#fbbf24');
+    y += sAddr * lh;
+  });
+
+  // Garis horizontal tipis
+  if (showLoc || showCustom) {
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillRect(bx, y + 2, Math.min(W*0.6, 300), 1);
+    y += sKode * 0.6;
+  }
+
+  // Kode foto
+  txt('Kode Foto: ' + kode, bx, y, sKode, 'rgba(255,255,255,0.85)', false);
+
+  document.getElementById('preview').src = canvas.toDataURL('image/jpeg', 0.92);
+  document.getElementById('btn-download').style.display = 'block';
+}
+
+function downloadPhoto() {
+  var canvas = document.getElementById('canvas');
+  var a = document.createElement('a');
+  var now = new Date();
+  var fname = 'stamp_' + now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '_' +
+    String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + '.jpg';
+  a.download = fname;
+  a.href = canvas.toDataURL('image/jpeg', 0.92);
+  a.click();
+}
+</script>
+</body>
+</html>
