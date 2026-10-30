@@ -205,10 +205,12 @@ function stampPhoto() {
     ctx.font = 'bold ' + sTime + 'px system-ui, sans-serif';
     timeW = ctx.measureText(timeStr).width;
     txt(timeStr, bx, y, sTime, '#ffffff');
-    // garis kuning vertikal
+    // garis kuning vertikal (pas setinggi jam + tanggal/hari aja)
     var lx = bx + timeW + pad*0.6;
+    var lineTop = y + sTime*0.08;
+    var lineH = sTime*0.82 + sDate*lh*2;
     ctx.fillStyle = '#fbbf24';
-    ctx.fillRect(lx, y + sTime*0.1, Math.max(3, baseSize/10), sTime*0.9 + sDate*lh*2);
+    ctx.fillRect(lx, lineTop, Math.max(3, baseSize/10), lineH);
     // tanggal & hari di kanan garis
     var rx = lx + pad*0.7;
     txt(dateStr, rx, y + sTime*0.15, sDate, '#ffffff');
