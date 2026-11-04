@@ -174,47 +174,123 @@ function stampPhoto() {
     rows.push({ text: customText, size: sMid, color: '#fbbf24', bold: false });
   }
 
-  // Ukur lebar maksimum
-  var maxW = 0;
-  rows.forEach(function(r) {
-    ctx.font = (r.bold ? 'bold ' : '') + r.size + 'px ' + (r.mono ? 'monospace' : 'system-ui, sans-serif');
-    maxW = Math.max(maxW, ctx.measureText(r.text).width);
-  });
+  // Layout ala Timemark: jam besar kiri + garis kuning + tanggal full + alamat
+  // (tanpa logo/brand Timemark)
+  var n3 = new Date();
+  var fullMonths = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  var days = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  var jamBesar = String(n3.getHours()).padStart(2,'0') + ':' + String(n3.getMinutes()).padStart(2,'0');
+  var tglFull = String(n3.getDate()).padStart(2,'0') + ' ' + fullMonths[n3.getMonth()] + ' ' + n3.getFullYear();
+  var hariStr = days[n3.getDay()];
 
-  var boxW = maxW + pad * 2;
-  var boxH = pad * 1.4;
-  rows.forEach(function(r) { boxH += r.size * lh; });
-  boxH += pad * 0.6;
+  var sJam = baseSize * 2.6;      // jam besar
+  var sTgl = baseSize * 0.95;     // tanggal
+  var sHari = baseSize * 0.95;    // hari
+  var sAddr = baseSize * 0.95;    // alamat
+  var sKoord = baseSize * 0.85;   // koordinat
+  var lhT = 1.3;
 
-  // Posisi kartu
-  var bx, by;
-  if (stampPos === 'top-left') { bx = pad; by = pad; }
-  else if (stampPos === 'top-right') { bx = W - boxW - pad; by = pad; }
-  else if (stampPos === 'bottom-right') { bx = W - boxW - pad; by = H - boxH - pad; }
-  else { bx = pad; by = H - boxH - pad; }
+  ctx.textBaseline = 'alphabetic';
 
-  // Gambar kartu (rounded rect)
-  var radius = Math.floor(baseSize * 0.6);
-  ctx.fillStyle = 'rgba(15,23,42,0.85)';
-  ctx.strokeStyle = 'rgba(251,191,36,0.35)';
-  ctx.lineWidth = Math.max(1.5, baseSize / 14);
-  ctx.beginPath();
-  ctx.roundRect(bx, by, boxW, boxH, radius);
-  ctx.fill();
-  ctx.stroke();
+  function drawShadow() {
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = Math.max(6, baseSize * 0.35);
+    ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+  }
+  function clearShadow() {
+    ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+  }
 
-  // Gambar teks
-  var ty = by + pad * 0.7;
-  rows.forEach(function(r) {
-    ctx.font = (r.bold ? 'bold ' : '') + r.size + 'px ' + (r.mono ? 'monospace' : 'system-ui, sans-serif');
-    ctx.fillStyle = r.color;
-    var tx = bx + pad;
-    if (stampPos === 'top-right' || stampPos === 'bottom-right') {
-      tx = bx + boxW - pad - ctx.measureText(r.text).width;
-    }
-    ctx.fillText(r.text, tx, ty);
-    ty += r.size * lh;
-  });
+  // Kumpulkan baris alamat
+  var addrLines = [];
+  if (showLoc && fixedAddr) {
+    fixedAddr.split('\n').forEach(function (ln) { if (ln.trim()) addrLines.push(ln.trim()); });
+  }
+  var koordLine = showLoc ? ('Koordinat: ' + coordStr) : null;
+  var customLines = [];
+  if (showCustom && customText) {
+    customText.split('\n').forEach(function (ln) { if (ln.trim()) customLines.push(ln.trim()); });
+  }
+
+  var tPad = Math.floor(baseSize * 1.1);
+  var sepGap = baseSize * 0.55;   // jarak jam ke garis kuning
+  var lineW = Math.max(4, baseSize * 0.14);  // tebal garis kuning
+
+  // Hitung tinggi total blok (dari bawah)
+  var blockH = 0;
+  function rowH(size) { return size * lhT; }
+  if (koordLine) blockH += rowH(sKoord) + baseSize * 0.5;
+  customLines.forEach(function () { blockH += rowH(sAddr); });
+  addrLines.forEach(function () { blockH += rowH(sAddr); });
+  if (showDT) { blockH += rowH(sHari) + rowH(sTgl) + rowH(sJam); }
+
+  var bx0, byBottom;
+  if (stampPos === 'top-left') { bx0 = tPad; byBottom = tPad + blockH; }
+  else if (stampPos === 'top-right') { bx0 = W - tPad; byBottom = tPad + blockH; }
+  else if (stampPos === 'bottom-right') { bx0 = W - tPad; byBottom = H - tPad; }
+  else { bx0 = tPad; byBottom = H - tPad; }
+  var rightAlign = (stampPos === 'top-right' || stampPos === 'bottom-right');
+
+  var cy = byBottom;  // jalan dari bawah ke atas
+
+  function drawLineRight(text, size, bold, color) {
+    ctx.font = (bold ? '700 ' : '400 ') + size + 'px system-ui, sans-serif';
+    var w = ctx.measureText(text).width;
+    var x = rightAlign ? bx0 - w : bx0;
+    drawShadow(); ctx.fillStyle = color || '#fff';
+    ctx.fillText(text, x, cy); clearShadow();
+    cy -= size * lhT;
+  }
+
+  // Koordinat (paling bawah)
+  if (koordLine) { drawLineRight(koordLine, sKoord, false, '#fff'); cy -= baseSize * 0.4; }
+  // Custom
+  customLines.slice().reverse().forEach(function (ln) { drawLineRight(ln, sAddr, false, '#fff'); });
+  // Alamat
+  addrLines.slice().reverse().forEach(function (ln) { drawLineRight(ln, sAddr, false, '#fff'); });
+
+  // Baris jam + tanggal (jam besar kiri, garis kuning, tanggal+hari kanan)
+  if (showDT) {
+    // hari (di bawah tanggal)
+    // tanggal
+    // jam besar
+    var jamY = cy;  // baseline jam
+    // Ukur
+    ctx.font = '700 ' + sJam + 'px system-ui, sans-serif';
+    var jamW = ctx.measureText(jamBesar).width;
+    ctx.font = '400 ' + sTgl + 'px system-ui, sans-serif';
+    var tglW = ctx.measureText(tglFull).width;
+    ctx.font = '400 ' + sHari + 'px system-ui, sans-serif';
+    var hariW = ctx.measureText(hariStr).width;
+    var txtW = Math.max(tglW, hariW);
+
+    var jx = rightAlign ? bx0 - jamW - sepGap - lineW - sepGap - txtW : bx0;
+    var sepX = jx + jamW + sepGap;
+    var txX = sepX + lineW + sepGap;
+
+    // Jam besar
+    ctx.font = '700 ' + sJam + 'px system-ui, sans-serif';
+    drawShadow(); ctx.fillStyle = '#fff';
+    ctx.fillText(jamBesar, jx, jamY); clearShadow();
+
+    // Garis kuning vertikal (setinggi jam + tanggal)
+    var sepTop = jamY - sJam - rowH(sTgl);
+    var sepBot = jamY + sJam * 0.12;
+    ctx.fillStyle = '#fbbf24';
+    // sesuaikan x bila rata kanan: garis tetap di posisi yang dihitung
+    ctx.fillRect(sepX, sepTop, lineW, sepBot - sepTop);
+
+    // Tanggal (sejajar atas jam)
+    ctx.font = '400 ' + sTgl + 'px system-ui, sans-serif';
+    drawShadow(); ctx.fillStyle = '#fff';
+    ctx.fillText(tglFull, txX, jamY - sJam * 0.55); clearShadow();
+    // Hari (di bawah tanggal)
+    ctx.font = '400 ' + sHari + 'px system-ui, sans-serif';
+    drawShadow(); ctx.fillStyle = '#fff';
+    ctx.fillText(hariStr, txX, jamY - sJam * 0.55 + rowH(sTgl)); clearShadow();
+
+    cy = sepTop - baseSize * 0.3;
+  }
 
   document.getElementById('preview').src = canvas.toDataURL('image/jpeg', 0.92);
   document.getElementById('btn-download').style.display = 'block';
