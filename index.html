@@ -204,7 +204,19 @@ function stampPhoto() {
   // Kumpulkan baris alamat
   var addrLines = [];
   if (showLoc && fixedAddr) {
-    fixedAddr.split('\n').forEach(function (ln) { if (ln.trim()) addrLines.push(ln.trim()); });
+    // word-wrap alamat max 92% lebar canvas
+    var _maxAW = W * 0.92;
+    ctx.font = '400 ' + sAddr + 'px system-ui, sans-serif';
+    fixedAddr.split('\n').forEach(function (ln0) {
+      ln0 = ln0.trim(); if (!ln0) return;
+      var _words = ln0.split(/\s+/), _cur = '';
+      _words.forEach(function (w) {
+        var _t = _cur ? _cur + ' ' + w : w;
+        if (ctx.measureText(_t).width > _maxAW && _cur) { addrLines.push(_cur); _cur = w; }
+        else _cur = _t;
+      });
+      if (_cur) addrLines.push(_cur);
+    });
   }
   var koordLine = showLoc ? ('Koordinat: ' + coordStr) : null;
   var customLines = [];
